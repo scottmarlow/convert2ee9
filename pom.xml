@@ -35,7 +35,7 @@
     </licenses>
 
     <properties>
-        <version.org.bytebuddy>1.9.11</version.org.bytebuddy>
+        <version.org.ow2.asm>7.3.1</version.org.ow2.asm>
         <skip.compile>false</skip.compile>
         <maven.compiler.target>1.8</maven.compiler.target>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -103,6 +103,11 @@
             <artifactId>junit</artifactId>
             <version>4.11</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm</artifactId>
+            <version>${version.org.ow2.asm}</version>
         </dependency>
     </dependencies>
 
