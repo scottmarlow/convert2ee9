@@ -417,6 +417,7 @@ public class Transformer implements ClassFileTransformer {
                     }
                 }
             } finally {
+                jarOutputStream.close();
                 jarFileSource.close();
             }
 
@@ -439,7 +440,7 @@ public class Transformer implements ClassFileTransformer {
                 sourceBAIS = inputStream;
             }
 
-            jarOutputStream.putNextEntry(jarEntry);
+            jarOutputStream.putNextEntry(new JarEntry(jarEntry.getName()));
             final byte[] buffer = new byte[4096];
             int count;
             while ((count = sourceBAIS.read(buffer)) != -1) {
