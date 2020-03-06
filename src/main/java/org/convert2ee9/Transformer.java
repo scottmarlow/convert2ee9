@@ -70,9 +70,31 @@ public class Transformer implements ClassFileTransformer {
     public byte[] transform(final ClassReader classReader) {
 
         final ClassWriter classWriter = new ClassWriter(classReader, 0);
-        final String className = classReader.getClassName();
 
         classReader.accept(new ClassVisitor(useASM7 ? Opcodes.ASM7 : Opcodes.ASM6, classWriter) {
+
+            @Override
+            public AnnotationVisitor visitTypeAnnotation(int typeRef, TypePath typePath, String descriptor, boolean visible) {
+                final String descOrig = descriptor;
+                descriptor = replaceJavaXwithJakarta(descriptor);
+                if (!descOrig.equals(descriptor)) {  // if we are changing
+                    // mark the class as transformed
+                    setClassTransformed(true);
+                }
+                return super.visitTypeAnnotation(typeRef, typePath, descriptor, visible);
+            }
+
+            @Override
+            public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
+                final String descOrig = descriptor;
+                descriptor = replaceJavaXwithJakarta(descriptor);
+                if (!descOrig.equals(descriptor)) {  // if we are changing
+                    // mark the class as transformed
+                    setClassTransformed(true);
+                }
+                AnnotationVisitor av = super.visitAnnotation(descriptor, visible);
+                return new MyAnnotationVisitor(av);
+            }
 
             @Override
             public void visitAttribute(Attribute attribute) {
@@ -108,16 +130,9 @@ public class Transformer implements ClassFileTransformer {
                 return new FieldVisitor(api, fv) {
 
                     @Override
-                    public void visitAttribute(Attribute attribute) {
-                        System.out.println("fieldvisitor:getAttributeCount type = " + attribute);
-                        super.visitAttribute(attribute);
-                    }
-
-                    @Override
                     public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
                         final String descOrig = descriptor;
                         descriptor = replaceJavaXwithJakarta(descriptor);
-System.out.println("fieldvisitor:visitAnnotation " + descriptor);
                         if (!descOrig.equals(descriptor)) {  // if we are changing
                             // mark the class as transformed
                             setClassTransformed(true);
@@ -161,6 +176,17 @@ System.out.println("fieldvisitor:visitAnnotation " + descriptor);
                 return new MethodVisitor(Opcodes.ASM6,
                         super.visitMethod(access, name, desc, signature, exceptions)) {
 
+                    @Override
+                    public AnnotationVisitor visitTypeAnnotation(int typeRef, TypePath typePath, String descriptor, boolean visible) {
+                        final String descOrig = descriptor;
+                        descriptor = replaceJavaXwithJakarta(descriptor);
+                        if (!descOrig.equals(descriptor)) {  // if we are changing
+                            // mark the class as transformed
+                            setClassTransformed(true);
+                        }
+                        return mv.visitTypeAnnotation(typeRef, typePath, descriptor, visible);
+                    }
+                    
                     @Override
                     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
 
@@ -520,5 +546,42 @@ System.out.println("fieldvisitor:visitAnnotation " + descriptor);
         } else {
             System.err.println("unexpected file extension type " + source.toString());
         }
+    }
+
+    private static class MyAnnotationVisitor extends AnnotationVisitor {
+        public MyAnnotationVisitor(AnnotationVisitor av) {
+            super(useASM7 ? Opcodes.ASM7 : Opcodes.ASM6, av);
+        }
+
+        @Override
+        public void visit(String name, Object value) {
+            av.visit(name, value);
+        }
+
+        @Override
+        public void visitEnum(String name, String descriptor, String value) {
+            if (descriptor != null) {
+                descriptor = replaceJavaXwithJakarta(replaceDottedJavaXwithJakarta(descriptor));
+            }
+            av.visitEnum(name, descriptor, value);
+        }
+
+        @Override
+        public AnnotationVisitor visitAnnotation(String name, String descriptor) {
+            if (descriptor != null) {
+                descriptor = replaceJavaXwithJakarta(replaceDottedJavaXwithJakarta(descriptor));
+            }
+            AnnotationVisitor av2 = av.visitAnnotation(name, descriptor);
+            return new MyAnnotationVisitor(av2);
+            
+            
+        }
+
+        @Override
+        public AnnotationVisitor visitArray(String name) {
+            AnnotationVisitor av2 = av.visitArray(name);
+            return new MyAnnotationVisitor(av2);
+        }
+
     }
 }
