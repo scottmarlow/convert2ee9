@@ -40,6 +40,7 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 
 import org.objectweb.asm.AnnotationVisitor;
+import org.objectweb.asm.Attribute;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -73,13 +74,17 @@ public class Transformer implements ClassFileTransformer {
 
         classReader.accept(new ClassVisitor(useASM7 ? Opcodes.ASM7 : Opcodes.ASM6, classWriter) {
 
+            @Override
+            public void visitAttribute(Attribute attribute) {
+                System.out.println("fieldvisitor:getAttributeCount type = " + attribute);
+                super.visitAttribute(attribute);
+            }
 
             // clear transformed state at start of each class visit
             @Override
             public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
                 // clear per class state
                 clearTransformationState();
-                System.out.println("transforming " + className);
                 super.visit(version, access, name, signature, superName, interfaces);
             }
 
@@ -90,7 +95,6 @@ public class Transformer implements ClassFileTransformer {
                 // check if class has already been modified
                 if (markerAlreadyTransformed.equals(name) &&
                         desc.equals("Z")) {
-                    System.out.println(className + " has already been transformed.");
                     setAlreadyTransformed(true);
                 } else {
                     final String descOrig = desc;
@@ -102,10 +106,18 @@ public class Transformer implements ClassFileTransformer {
                 }
                 FieldVisitor fv = super.visitField(access, name, desc, signature, value);
                 return new FieldVisitor(api, fv) {
+
+                    @Override
+                    public void visitAttribute(Attribute attribute) {
+                        System.out.println("fieldvisitor:getAttributeCount type = " + attribute);
+                        super.visitAttribute(attribute);
+                    }
+
                     @Override
                     public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
                         final String descOrig = descriptor;
                         descriptor = replaceJavaXwithJakarta(descriptor);
+System.out.println("fieldvisitor:visitAnnotation " + descriptor);
                         if (!descOrig.equals(descriptor)) {  // if we are changing
                             // mark the class as transformed
                             setClassTransformed(true);
@@ -383,7 +395,6 @@ public class Transformer implements ClassFileTransformer {
         final Path source = Paths.get(args[0]);
         final Path target = Paths.get(args[1]);
         if (source.toString().endsWith(".jar")) {
-            System.out.println("processing " + source.toString());
             jarFile(t, source, target);
         } else {
             classFile(t, source, target);
@@ -402,20 +413,14 @@ public class Transformer implements ClassFileTransformer {
                 for (Enumeration<JarEntry> entries = jarFileSource.entries(); entries.hasMoreElements(); ) {
                     JarEntry jarEntry = entries.nextElement();
                     String name = jarEntry.getName();
-                    System.out.println("processing " + name);
                     if (jarEntry.getName().endsWith(".xml")) {
-                        System.out.println("processing xml file");
                         ZipEntry zipEntrySource = jarFileSource.getEntry(name);
                         String targetName = jarEntry.getName();
                         xmlFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
-                        // TODO: rename javax properties within certain xml files, like persistence.xml
                     } else if (jarEntry.getName().endsWith(".class")) {
-                        System.out.println("processing " + name);
                         ZipEntry zipEntrySource = jarFileSource.getEntry(name);
                         jarFileEntry(t, jarEntry, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
-
                     } else if (jarEntry.getName().endsWith("/")) {
-                        System.out.println("ignoring folder name " + name);
                     } else if (jarEntry.getName().startsWith("META-INF/services/javax.")) {
                         // rename service files like META-INF/services/javax.persistence.spi.PersistenceProvider
                         // to META-INF/services/jakarta.persistence.spi.PersistenceProvider
@@ -423,7 +428,6 @@ public class Transformer implements ClassFileTransformer {
                         String targetName = jarEntry.getName().replace("javax.", "jakarta.");
                         copyFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
                     } else {
-                        System.out.println("copy file " + name);
                         ZipEntry zipEntrySource = jarFileSource.getEntry(name);
                         String targetName = jarEntry.getName();
                         copyFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
@@ -471,7 +475,7 @@ public class Transformer implements ClassFileTransformer {
     
 
     private static void jarFileEntry(final Transformer t, final JarEntry jarEntry, final InputStream inputStream, final JarOutputStream jarOutputStream) throws IOException {
-        final InputStream sourceBAIS;
+        InputStream sourceBAIS = null;
         try {
             ClassReader classReader = new ClassReader(inputStream);
             final byte[] targetBytes = t.transform(classReader);
@@ -491,20 +495,27 @@ public class Transformer implements ClassFileTransformer {
             }
         } finally {
             inputStream.close();
+            if (sourceBAIS != inputStream && sourceBAIS != null) {
+                sourceBAIS.close();
+            }
         }
     }
 
     private static void classFile(final Transformer t, final Path source, final Path target) throws IOException {
         if (source.toString().endsWith(".class")) {
+            InputStream sourceBAIS = null;
             InputStream inputStream = Files.newInputStream(source);
             try {
                 ClassReader classReader = new ClassReader(inputStream);
                 final byte[] targetBytes = t.transform(classReader);
                 // write modified class content
-                final ByteArrayInputStream sourceBAIS = new ByteArrayInputStream(targetBytes);
+                sourceBAIS = new ByteArrayInputStream(targetBytes);
                 Files.copy(sourceBAIS, target);
             } finally {
                 inputStream.close();
+                if (sourceBAIS != null) {
+                    sourceBAIS.close();
+                }
             }
         } else {
             System.err.println("unexpected file extension type " + source.toString());
