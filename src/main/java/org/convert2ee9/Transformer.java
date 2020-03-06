@@ -81,7 +81,8 @@ public class Transformer implements ClassFileTransformer {
                     // mark the class as transformed
                     setClassTransformed(true);
                 }
-                return super.visitTypeAnnotation(typeRef, typePath, descriptor, visible);
+                AnnotationVisitor av =  super.visitTypeAnnotation(typeRef, typePath, descriptor, visible);
+                return new MyAnnotationVisitor(av);
             }
 
             @Override
@@ -107,6 +108,21 @@ public class Transformer implements ClassFileTransformer {
             public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
                 // clear per class state
                 clearTransformationState();
+                String superNameOrig = superName;
+                superName = replaceJavaXwithJakarta(replaceDottedJavaXwithJakarta(superName));
+                if (!superNameOrig.equals(superName)) {
+                    // mark the class as transformed
+                    setClassTransformed(true);
+                }
+                for(int index = 0; index < interfaces.length; index++) {
+                    String orig = interfaces[index];
+                    interfaces[index] = replaceJavaXwithJakarta(replaceDottedJavaXwithJakarta(interfaces[index]));
+                    if (!orig.equals(interfaces[index])) {
+                        // mark the class as transformed
+                        setClassTransformed(true);
+                    }
+                }
+                
                 super.visit(version, access, name, signature, superName, interfaces);
             }
 
@@ -137,7 +153,9 @@ public class Transformer implements ClassFileTransformer {
                             // mark the class as transformed
                             setClassTransformed(true);
                         }
-                        return fv.visitAnnotation(descriptor, visible);
+                        AnnotationVisitor av = fv.visitAnnotation(descriptor, visible);
+                        return new MyAnnotationVisitor(av);
+                        
                     }
 
                     @Override
@@ -148,7 +166,9 @@ public class Transformer implements ClassFileTransformer {
                             // mark the class as transformed
                             setClassTransformed(true);
                         }
-                        return fv.visitTypeAnnotation(typeRef, typePath, descriptor, visible);
+                        AnnotationVisitor av = fv.visitTypeAnnotation(typeRef, typePath, descriptor, visible);
+                        return new MyAnnotationVisitor(av);
+                        
                     }
                 };
             }
@@ -184,7 +204,22 @@ public class Transformer implements ClassFileTransformer {
                             // mark the class as transformed
                             setClassTransformed(true);
                         }
-                        return mv.visitTypeAnnotation(typeRef, typePath, descriptor, visible);
+                        AnnotationVisitor av = mv.visitTypeAnnotation(typeRef, typePath, descriptor, visible);
+                        return new MyAnnotationVisitor(av);
+                    }
+                    
+                    @Override
+                    public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
+                        final String descOrig = descriptor;
+
+                        descriptor = replaceJavaXwithJakarta(descriptor);
+                        if (!descOrig.equals(descriptor)) {  // if we are changing
+                            // mark the class as transformed
+                            setClassTransformed(true);
+                        }
+                        
+                        AnnotationVisitor av = mv.visitAnnotation(descriptor, visible);
+                        return new MyAnnotationVisitor(av);
                     }
                     
                     @Override
@@ -199,18 +234,6 @@ public class Transformer implements ClassFileTransformer {
                             setClassTransformed(true);
                         }
                         mv.visitMethodInsn(opcode, owner, name, desc, itf);
-                    }
-
-                    @Override
-                    public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
-                        final String descOrig = descriptor;
-
-                        descriptor = replaceJavaXwithJakarta(descriptor);
-                        if (!descOrig.equals(descriptor)) {  // if we are changing
-                            // mark the class as transformed
-                            setClassTransformed(true);
-                        }
-                        return mv.visitAnnotation(descriptor, visible);
                     }
 
                     @Override
