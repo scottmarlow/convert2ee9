@@ -407,7 +407,7 @@ public class Transformer implements ClassFileTransformer {
                         System.out.println("processing xml file");
                         ZipEntry zipEntrySource = jarFileSource.getEntry(name);
                         String targetName = jarEntry.getName();
-                        copyFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
+                        xmlFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
                         // TODO: rename javax properties within certain xml files, like persistence.xml
                     } else if (jarEntry.getName().endsWith(".class")) {
                         System.out.println("processing " + name);
@@ -439,6 +439,23 @@ public class Transformer implements ClassFileTransformer {
         }
     }
 
+    private static void xmlFile(String targetName, InputStream inputStream, JarOutputStream jarOutputStream) throws IOException {
+        try {
+            ByteArrayOutputStream xmlOutputStream = new ByteArrayOutputStream();
+            byte[] xmlBuffer = new byte[4096];
+            int length;
+            while ((length = inputStream.read(xmlBuffer)) != -1) {
+                xmlOutputStream.write(xmlBuffer, 0, length);
+            }
+            String xmlValue = xmlOutputStream.toString("UTF-8").replace("javax.", "jakarta.");
+            xmlBuffer = xmlValue.getBytes("UTF-8");
+            jarOutputStream.putNextEntry(new JarEntry(targetName));
+            jarOutputStream.write(xmlBuffer);
+        } finally {
+            inputStream.close();
+        }
+    }
+
     private static void copyFile(String targetName, InputStream inputStream, JarOutputStream jarOutputStream) throws IOException {
         try {
             jarOutputStream.putNextEntry(new JarEntry(targetName));
@@ -461,7 +478,6 @@ public class Transformer implements ClassFileTransformer {
             if (targetBytes != null) {
                 // will write modified class content
                 sourceBAIS = new ByteArrayInputStream(targetBytes);
-                
             } else {
                 // copy original class
                 sourceBAIS = inputStream;
