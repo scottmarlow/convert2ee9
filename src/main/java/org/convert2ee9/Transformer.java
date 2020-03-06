@@ -395,7 +395,7 @@ public class Transformer implements ClassFileTransformer {
         if (source.toString().endsWith(".jar")) {
             JarFile jarFileSource = new JarFile(source.toFile());
 
-            JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(target.toFile().getName()), jarFileSource.getManifest());
+            JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(target.toFile().getName())/*, jarFileSource.getManifest()*/);
 
             try {
 
@@ -403,17 +403,30 @@ public class Transformer implements ClassFileTransformer {
                     JarEntry jarEntry = entries.nextElement();
                     String name = jarEntry.getName();
                     System.out.println("processing " + name);
-//                     if (jarEntry.getName().contains("META-INF/services/")) {
-                    if (jarEntry.getName().contains("META-INF/")) {
-                        System.out.println("TODO: rename service files from javax to jakarta for: " + name);
-                    } else if (jarEntry.getName().endsWith(".xml")) {
-                        System.out.println("TODO: rename javax properties within certain xml files, like persistence.xml, to also handle file: " + name);
-                    } else if (jarEntry.getName().endsWith(".class")) { 
+                    if (jarEntry.getName().endsWith(".xml")) {
+                        System.out.println("processing xml file");
+                        ZipEntry zipEntrySource = jarFileSource.getEntry(name);
+                        String targetName = jarEntry.getName();
+                        copyFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
+                        // TODO: rename javax properties within certain xml files, like persistence.xml
+                    } else if (jarEntry.getName().endsWith(".class")) {
                         System.out.println("processing " + name);
                         ZipEntry zipEntrySource = jarFileSource.getEntry(name);
                         jarFileEntry(t, jarEntry, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
+
+                    } else if (jarEntry.getName().endsWith("/")) {
+                        System.out.println("ignoring folder name " + name);
+                    } else if (jarEntry.getName().startsWith("META-INF/services/javax.")) {
+                        // rename service files like META-INF/services/javax.persistence.spi.PersistenceProvider
+                        // to META-INF/services/jakarta.persistence.spi.PersistenceProvider
+                        ZipEntry zipEntrySource = jarFileSource.getEntry(name);
+                        String targetName = jarEntry.getName().replace("javax.", "jakarta.");
+                        copyFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
                     } else {
-                        System.out.println("ignoring " + name);
+                        System.out.println("copy file " + name);
+                        ZipEntry zipEntrySource = jarFileSource.getEntry(name);
+                        String targetName = jarEntry.getName();
+                        copyFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
                     }
                 }
             } finally {
@@ -425,6 +438,20 @@ public class Transformer implements ClassFileTransformer {
             System.err.println("unexpected file extension type " + source.toString());
         }
     }
+
+    private static void copyFile(String targetName, InputStream inputStream, JarOutputStream jarOutputStream) throws IOException {
+        try {
+            jarOutputStream.putNextEntry(new JarEntry(targetName));
+            final byte[] buffer = new byte[4096];
+            int count;
+            while ((count = inputStream.read(buffer)) != -1) {
+                jarOutputStream.write(buffer, 0, count);
+            }
+        } finally {
+            inputStream.close();
+        }
+    }
+    
 
     private static void jarFileEntry(final Transformer t, final JarEntry jarEntry, final InputStream inputStream, final JarOutputStream jarOutputStream) throws IOException {
         final InputStream sourceBAIS;
