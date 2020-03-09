@@ -495,7 +495,7 @@ public class Transformer implements ClassFileTransformer {
     private static void xmlFile(String targetName, InputStream inputStream, JarOutputStream jarOutputStream) throws IOException {
         try {
             ByteArrayOutputStream xmlOutputStream = new ByteArrayOutputStream();
-            byte[] xmlBuffer = new byte[4096];
+            byte[] xmlBuffer = new byte[16384];
             int length;
             while ((length = inputStream.read(xmlBuffer)) != -1) {
                 xmlOutputStream.write(xmlBuffer, 0, length);
@@ -512,7 +512,7 @@ public class Transformer implements ClassFileTransformer {
     private static void copyFile(String targetName, InputStream inputStream, JarOutputStream jarOutputStream) throws IOException {
         try {
             jarOutputStream.putNextEntry(new JarEntry(targetName));
-            final byte[] buffer = new byte[4096];
+            final byte[] buffer = new byte[16384];
             int count;
             while ((count = inputStream.read(buffer)) != -1) {
                 jarOutputStream.write(buffer, 0, count);
@@ -537,7 +537,7 @@ public class Transformer implements ClassFileTransformer {
             }
 
             jarOutputStream.putNextEntry(new JarEntry(jarEntry.getName()));
-            final byte[] buffer = new byte[4096];
+            final byte[] buffer = new byte[16384];
             int count;
             while ((count = sourceBAIS.read(buffer)) != -1) {
                 jarOutputStream.write(buffer, 0, count);
