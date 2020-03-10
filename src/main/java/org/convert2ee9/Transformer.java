@@ -32,6 +32,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.ProtectionDomain;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
@@ -108,15 +110,18 @@ public class Transformer implements ClassFileTransformer {
             public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
                 // clear per class state
                 clearTransformationState();
-                String superNameOrig = superName;
-                superName = replaceJavaXwithJakarta(replaceDottedJavaXwithJakarta(superName));
-                if (!superNameOrig.equals(superName)) {
-                    // mark the class as transformed
-                    setClassTransformed(true);
+                if (superName != null) {
+                    String superNameOrig = superName;
+                    superName = replaceJavaXwithJakarta(superName);
+                    if (!superNameOrig.equals(superName)) {
+                        // mark the class as transformed
+                        setClassTransformed(true);
+                    }
                 }
+
                 for(int index = 0; index < interfaces.length; index++) {
                     String orig = interfaces[index];
-                    interfaces[index] = replaceJavaXwithJakarta(replaceDottedJavaXwithJakarta(interfaces[index]));
+                    interfaces[index] = replaceJavaXwithJakarta(interfaces[index]);
                     if (!orig.equals(interfaces[index])) {
                         // mark the class as transformed
                         setClassTransformed(true);
@@ -241,7 +246,7 @@ public class Transformer implements ClassFileTransformer {
                         if (value instanceof Type) {
                             Type type = (Type) value;
                             String descOrig = type.getDescriptor();
-                            String desc = replaceDottedJavaXwithJakarta(replaceJavaXwithJakarta(descOrig));
+                            String desc = replaceJavaXwithJakarta(descOrig);
                             if (!descOrig.equals(desc)) { // if we are changing
                                 // mark the class as transformed
                                 setClassTransformed(true);
@@ -252,8 +257,7 @@ public class Transformer implements ClassFileTransformer {
 
                         if (value instanceof String) {
                             final String typeOrig = (String) value;
-                            String replacement = replaceDottedJavaXwithJakarta((String) value);
-                            replacement = replaceJavaXwithJakarta(replacement);
+                            String replacement = replaceJavaXwithJakarta((String) value);
                             if (!typeOrig.equals(replacement)) {  // if we are changing
                                 // mark the class as transformed
                                 setClassTransformed(true);
@@ -325,6 +329,90 @@ public class Transformer implements ClassFileTransformer {
         return transform(classReader);
     }
 
+    private static Map <String, String> replacementMap = new HashMap<>();
+    static { 
+        replacementMap.put("javax/annotation/security", "jakarta/annotation/security");
+        replacementMap.put("javax/annotation/sql", "jakarta/annotation/sql");
+        replacementMap.put("javax/batch", "jakarta/batch");
+        replacementMap.put("javax/decorator", "jakarta/decorator");
+        replacementMap.put("javax/ejb", "jakarta/ejb");
+        replacementMap.put("javax/el", "jakarta/el");
+        replacementMap.put("javax/enterprise", "jakarta/enterprise");
+        replacementMap.put("javax/faces", "jakarta/faces");
+        replacementMap.put("javax/inject", "jakarta/inject");
+        replacementMap.put("javax/interceptor", "jakarta/interceptor");
+        replacementMap.put("javax/jms", "jakarta/jms");
+        replacementMap.put("javax/json", "jakarta/json");
+        replacementMap.put("javax/mail", "jakarta/mail");
+        replacementMap.put("javax/management/j2ee", "jakarta/management/j2ee");
+        replacementMap.put("javax/persistence", "jakarta/persistence");
+        replacementMap.put("javax/resource", "jakarta/resource");
+        replacementMap.put("javax/security/auth", "jakarta/security/auth");
+        replacementMap.put("javax/security/enterprise", "jakarta/security/enterprise");
+        replacementMap.put("javax/security/jacc", "jakarta/security/jacc");
+        replacementMap.put("javax/servlet", "jakarta/servlet");
+        // only need to match with first letter of javax.transaction level classes
+        replacementMap.put("javax/transaction/H", "jakarta/transaction/H");
+        replacementMap.put("javax/transaction/I", "jakarta/transaction/I");
+        replacementMap.put("javax/transaction/N", "jakarta/transaction/N");
+        replacementMap.put("javax/transaction/R", "jakarta/transaction/R");
+        replacementMap.put("javax/transaction/S", "jakarta/transaction/S");
+        replacementMap.put("javax/transaction/T", "jakarta/transaction/T");
+        replacementMap.put("javax/transaction/U", "jakarta/transaction/U");
+        replacementMap.put("javax/validation", "jakarta/validation");
+        replacementMap.put("javax/websocket", "jakarta/websocket");
+        replacementMap.put("javax/ws/rs", "jakarta/ws/rs");
+        
+        replacementMap.put("javax.annotation.security", "jakarta.annotation.security");
+        replacementMap.put("javax.annotation.sql", "jakarta.annotation.sql");
+        replacementMap.put("javax.batch", "jakarta.batch");
+        replacementMap.put("javax.decorator", "jakarta.decorator");
+        replacementMap.put("javax.ejb", "jakarta.ejb");
+        replacementMap.put("javax.el", "jakarta.el");
+        replacementMap.put("javax.enterprise", "jakarta.enterprise");
+        replacementMap.put("javax.faces", "jakarta.faces");
+        replacementMap.put("javax.inject", "jakarta.inject");
+        replacementMap.put("javax.interceptor", "jakarta.interceptor");
+        replacementMap.put("javax.jms", "jakarta.jms");
+        replacementMap.put("javax.json", "jakarta.json");
+        replacementMap.put("javax.mail", "jakarta.mail");
+        replacementMap.put("javax.management.j2ee", "jakarta.management.j2ee");
+        replacementMap.put("javax.persistence", "jakarta.persistence");
+        replacementMap.put("javax.resource", "jakarta.resource");
+        replacementMap.put("javax.security.auth", "jakarta.security.auth");
+        replacementMap.put("javax.security.enterprise", "jakarta.security.enterprise");
+        replacementMap.put("javax.security.jacc", "jakarta.security.jacc");
+        replacementMap.put("javax.servlet", "jakarta.servlet");
+        // only need to match with first letter of javax.transaction level classes
+        replacementMap.put("javax.transaction.H", "jakarta.transaction.H");
+        replacementMap.put("javax.transaction.I", "jakarta.transaction.I");
+        replacementMap.put("javax.transaction.N", "jakarta.transaction.N");
+        replacementMap.put("javax.transaction.R", "jakarta.transaction.R");
+        replacementMap.put("javax.transaction.S", "jakarta.transaction.S");
+        replacementMap.put("javax.transaction.T", "jakarta.transaction.T");
+        replacementMap.put("javax.transaction.U", "jakarta.transaction.U");
+        replacementMap.put("javax.validation", "jakarta.validation");
+        replacementMap.put("javax.websocket", "jakarta.websocket");
+        replacementMap.put("javax.ws.rs", "jakarta.ws.rs");
+        
+    };
+    
+    private static String replaceJavaXwithJakarta(String desc) {
+        StringBuilder stringBuilder = new StringBuilder(desc);
+        for(Map.Entry<String, String> possibleReplacement: replacementMap.entrySet()) {
+            String key = possibleReplacement.getKey();
+            String value = possibleReplacement.getValue();
+            int pos = stringBuilder.indexOf(key, 0);
+            while(pos > -1) {
+                int length = pos  + key.length();
+                int next = pos + value.length();
+                stringBuilder.replace(pos, length, value);
+                pos = stringBuilder.indexOf(key, next);
+            }
+        }
+        return stringBuilder.toString();
+    }
+/*    
     private static String replaceJavaXwithJakarta(String desc) {
         // TODO: try using a regular expression
         // note that we will ignore JDK javax.transaction.xa classes
@@ -401,7 +489,7 @@ public class Transformer implements ClassFileTransformer {
 
         return result;
     }
-
+  */
     private static int getMajorJavaVersion() {
         int major = 8;
         String version = System.getProperty("java.specification.version", null);
@@ -584,7 +672,7 @@ public class Transformer implements ClassFileTransformer {
         @Override
         public void visitEnum(String name, String descriptor, String value) {
             if (descriptor != null) {
-                descriptor = replaceJavaXwithJakarta(replaceDottedJavaXwithJakarta(descriptor));
+                descriptor = replaceJavaXwithJakarta(descriptor);
             }
             av.visitEnum(name, descriptor, value);
         }
@@ -592,7 +680,7 @@ public class Transformer implements ClassFileTransformer {
         @Override
         public AnnotationVisitor visitAnnotation(String name, String descriptor) {
             if (descriptor != null) {
-                descriptor = replaceJavaXwithJakarta(replaceDottedJavaXwithJakarta(descriptor));
+                descriptor = replaceJavaXwithJakarta(descriptor);
             }
             AnnotationVisitor av2 = av.visitAnnotation(name, descriptor);
             return new MyAnnotationVisitor(av2);
