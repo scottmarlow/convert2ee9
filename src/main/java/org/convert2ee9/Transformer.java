@@ -542,9 +542,8 @@ public class Transformer implements ClassFileTransformer {
 
         if (source.toString().endsWith(".jar")) {
             JarFile jarFileSource = new JarFile(source.toFile());
-
-            JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(target.toFile().getName())/*, jarFileSource.getManifest()*/);
-
+            FileOutputStream fileOutputStream = new FileOutputStream(target.toFile());
+            JarOutputStream jarOutputStream = new JarOutputStream(fileOutputStream);
             try {
 
                 for (Enumeration<JarEntry> entries = jarFileSource.entries(); entries.hasMoreElements(); ) {
@@ -573,6 +572,7 @@ public class Transformer implements ClassFileTransformer {
             } finally {
                 jarOutputStream.close();
                 jarFileSource.close();
+                fileOutputStream.close();
             }
 
         } else {
@@ -645,9 +645,14 @@ public class Transformer implements ClassFileTransformer {
             try {
                 ClassReader classReader = new ClassReader(inputStream);
                 final byte[] targetBytes = t.transform(classReader);
-                // write modified class content
-                sourceBAIS = new ByteArrayInputStream(targetBytes);
-                Files.copy(sourceBAIS, target);
+                if (targetBytes != null) {
+                    // write modified class content
+                    sourceBAIS = new ByteArrayInputStream(targetBytes);
+                    Files.copy(sourceBAIS, target);
+                } else {
+                    sourceBAIS = Files.newInputStream(source);
+                    Files.copy(sourceBAIS, target);
+                }
             } finally {
                 inputStream.close();
                 if (sourceBAIS != null) {
