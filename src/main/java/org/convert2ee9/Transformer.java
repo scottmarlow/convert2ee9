@@ -16,11 +16,6 @@
 
 package org.convert2ee9;
 
-import static org.objectweb.asm.Opcodes.ACC_FINAL;
-import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
-import static org.objectweb.asm.Opcodes.ACC_STATIC;
-
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
@@ -59,15 +54,14 @@ import org.objectweb.asm.TypePath;
  * <p>
  * Map javax.* classes to their jakarta.* equivalent as outlined on
  * https://github.com/eclipse-ee4j/jakartaee-platform/blob/master/namespace/mappings.adoc
+ * 
+ * TODO:  introduce META-INF/jakartasignature.prop file with version stamp so we can ignore jars already transformed.
  *
  * @author Scott Marlow
  */
 public class Transformer implements ClassFileTransformer {
 
     private static final boolean useASM7 = getMajorJavaVersion() >= 11;
-    // TODO: switch from per class markerAlreadyTransformed, to jar level META-INF/jakarta.sig file or something like that.  
-    private static final String markerAlreadyTransformed = "$_org_convert2ee9_Transformer_transformed_$";
-
     private boolean classTransformed;
     private boolean alreadyTransformed;
 
@@ -137,17 +131,11 @@ public class Transformer implements ClassFileTransformer {
             @Override
             public FieldVisitor visitField(int access, String name, String desc, String signature, Object value) {
 
-                // check if class has already been modified
-                if (markerAlreadyTransformed.equals(name) &&
-                        desc.equals("Z")) {
-                    setAlreadyTransformed(true);
-                } else {
-                    final String descOrig = desc;
-                    desc = replaceJavaXwithJakarta(desc);
-                    if (!descOrig.equals(desc)) {  // if we are changing
-                        // mark the class as transformed
-                        setClassTransformed(true);
-                    }
+                final String descOrig = desc;
+                desc = replaceJavaXwithJakarta(desc);
+                if (!descOrig.equals(desc)) {  // if we are changing
+                    // mark the class as transformed
+                    setClassTransformed(true);
                 }
                 FieldVisitor fv = super.visitField(access, name, desc, signature, value);
                 return new FieldVisitor(api, fv) {
@@ -184,9 +172,6 @@ public class Transformer implements ClassFileTransformer {
             // mark class as transformed (only if class transformations were made)
             @Override
             public void visitEnd() {
-                if (transformationsMade()) {
-                    cv.visitField(ACC_PUBLIC + ACC_STATIC + ACC_FINAL, markerAlreadyTransformed, "Z", null, null).visitEnd();
-                }
                 super.visitEnd();
             }
 
