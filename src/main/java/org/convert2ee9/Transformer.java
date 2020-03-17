@@ -16,6 +16,7 @@
 
 package org.convert2ee9;
 
+import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 import static org.objectweb.asm.Opcodes.ACC_STATIC;
 
@@ -64,6 +65,7 @@ import org.objectweb.asm.TypePath;
 public class Transformer implements ClassFileTransformer {
 
     private static final boolean useASM7 = getMajorJavaVersion() >= 11;
+    // TODO: switch from per class markerAlreadyTransformed, to jar level META-INF/jakarta.sig file or something like that.  
     private static final String markerAlreadyTransformed = "$_org_convert2ee9_Transformer_transformed_$";
 
     private boolean classTransformed;
@@ -183,7 +185,7 @@ public class Transformer implements ClassFileTransformer {
             @Override
             public void visitEnd() {
                 if (transformationsMade()) {
-                    cv.visitField(ACC_PUBLIC + ACC_STATIC, markerAlreadyTransformed, "Z", null, null).visitEnd();
+                    cv.visitField(ACC_PUBLIC + ACC_STATIC + ACC_FINAL, markerAlreadyTransformed, "Z", null, null).visitEnd();
                 }
                 super.visitEnd();
             }
@@ -538,7 +540,7 @@ public class Transformer implements ClassFileTransformer {
         }
     }
 
-    private static void jarFile(final Transformer t, final Path source, final Path target) throws IOException {
+    private static void jarFile(final Transformer t, final Path source, final Path target) throws IOException, IllegalClassFormatException {
 
         if (source.toString().endsWith(".jar")) {
             JarFile jarFileSource = new JarFile(source.toFile());
@@ -554,8 +556,7 @@ public class Transformer implements ClassFileTransformer {
                         String targetName = jarEntry.getName();
                         xmlFile(targetName, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
                     } else if (jarEntry.getName().endsWith(".class")) {
-                        ZipEntry zipEntrySource = jarFileSource.getEntry(name);
-                        jarFileEntry(t, jarEntry, jarFileSource.getInputStream(zipEntrySource), jarOutputStream);
+                        jarFileEntry(t, jarEntry, jarFileSource, jarOutputStream);
                     } else if (jarEntry.getName().endsWith("/")) {
                     } else if (jarEntry.getName().startsWith("META-INF/services/javax.")) {
                         // rename service files like META-INF/services/javax.persistence.spi.PersistenceProvider
@@ -606,31 +607,49 @@ public class Transformer implements ClassFileTransformer {
                 jarOutputStream.write(buffer, 0, count);
             }
         } finally {
+            jarOutputStream.closeEntry();
             inputStream.close();
+            
         }
     }
     
-
-    private static void jarFileEntry(final Transformer t, final JarEntry jarEntry, final InputStream inputStream, final JarOutputStream jarOutputStream) throws IOException {
+    // transform class in an archive file
+    private static void jarFileEntry(final Transformer t, final JarEntry jarEntry, final JarFile jarFileSource, final JarOutputStream jarOutputStream) throws IOException, IllegalClassFormatException {
+        ZipEntry zipEntrySource = jarFileSource.getEntry(jarEntry.getName());
+        InputStream inputStream = jarFileSource.getInputStream(zipEntrySource);
+        if (jarEntry.getSize() > Integer.MAX_VALUE) {
+            System.out.println("error " + jarEntry.getName() +" class is larger than Integer.MAX_VALUE, getSize() =  " + jarEntry.getSize() );
+            System.exit(1);
+        }
+        byte [] byteBuffer = new byte [(int)jarEntry.getSize()];
+        int offset = 0;
+        int numRead = 0;
+        while (offset < byteBuffer.length && (numRead = inputStream.read(byteBuffer, offset, byteBuffer.length - offset)) >= 0) {
+            offset += numRead;
+        }
+        if (offset != byteBuffer.length) {
+            System.out.println("error reading bytes from " + jarEntry.getName() +", expected to read " + byteBuffer.length + " but only read " + offset);
+            System.exit(1);
+        }
         InputStream sourceBAIS = null;
         try {
-            ClassReader classReader = new ClassReader(inputStream);
-            final byte[] targetBytes = t.transform(classReader);
+            final byte[] targetBytes = t.transform(null, null, null, null, byteBuffer);
             if (targetBytes != null) {
                 // will write modified class content
                 sourceBAIS = new ByteArrayInputStream(targetBytes);
             } else {
                 // copy original class
-                sourceBAIS = inputStream;
+                sourceBAIS = new ByteArrayInputStream(byteBuffer); 
             }
 
             jarOutputStream.putNextEntry(new JarEntry(jarEntry.getName()));
             final byte[] buffer = new byte[16384];
-            int count;
-            while ((count = sourceBAIS.read(buffer)) != -1) {
-                jarOutputStream.write(buffer, 0, count);
+            int sourceCounter;
+            while ((sourceCounter = sourceBAIS.read(buffer)) != -1) {
+                jarOutputStream.write(buffer, 0, sourceCounter);
             }
         } finally {
+            jarOutputStream.closeEntry();
             inputStream.close();
             if (sourceBAIS != inputStream && sourceBAIS != null) {
                 sourceBAIS.close();
@@ -648,11 +667,10 @@ public class Transformer implements ClassFileTransformer {
                 if (targetBytes != null) {
                     // write modified class content
                     sourceBAIS = new ByteArrayInputStream(targetBytes);
-                    Files.copy(sourceBAIS, target);
                 } else {
                     sourceBAIS = Files.newInputStream(source);
-                    Files.copy(sourceBAIS, target);
                 }
+                Files.copy(sourceBAIS, target);
             } finally {
                 inputStream.close();
                 if (sourceBAIS != null) {
